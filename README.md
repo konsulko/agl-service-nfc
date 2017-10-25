@@ -35,4 +35,4 @@ Expect random error, but seem to stay stable and working.
 
 ¹ UID is randomly generated so the tag is detected as a new one on each poll. 
 
-² Polling is stopped at detection bu no tag is exposed.
+² Polling is stopped at detection but no tag is exposed.
