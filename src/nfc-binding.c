@@ -4,14 +4,16 @@
 #include "libnfc_reader.h"
 #endif
 
-struct afb_event on_nfc_read_event;
+struct afb_event on_nfc_target_add_event;
+struct afb_event on_nfc_target_remove_event;
 
 /// @brief Binding's initialization.
 /// @return Exit code, zero on success, non-zero otherwise.
 int init()
 {
-	on_nfc_read_event = afb_daemon_make_event("on-nfc-read");
-	if (!afb_event_is_valid(on_nfc_read_event))
+	on_nfc_target_add_event = afb_daemon_make_event("on-nfc-target-add");
+	on_nfc_target_remove_event = afb_daemon_make_event("on-nfc-target-remove");
+	if (!afb_event_is_valid(on_nfc_target_add_event) || !afb_event_is_valid(on_nfc_target_remove_event))
 	{
 		AFB_ERROR("Failed to create a valid event!");
 		return 1;
@@ -31,17 +33,34 @@ int init()
 /// @brief Get a list of devices.
 /// @param[in] req The query.
 void verb_subscribe(struct afb_req req)
-{
-	if (afb_req_subscribe(req, on_nfc_read_event)) afb_req_fail(req, NULL, "Subscription failure!");
-	else afb_req_success(req, NULL, "Subscription success!");
+{	
+	if (!afb_req_subscribe(req, on_nfc_target_remove_event))
+	{
+		if (!afb_req_subscribe(req, on_nfc_target_add_event))
+		{
+			afb_req_success(req, NULL, "Subscription success!");
+			return;
+		}
+		else afb_req_unsubscribe(req, on_nfc_target_remove_event);
+	}
+	
+	afb_req_fail(req, NULL, "Subscription failure!");
 }
 
 /// @brief Get a list of devices.
 /// @param[in] req The query.
 void verb_unsubscribe(struct afb_req req)
 {
-	if (afb_req_unsubscribe(req, on_nfc_read_event)) afb_req_fail(req, NULL, "Unsubscription failure!");
-	else afb_req_success(req, NULL, "Unsubscription success!");
+	if (!afb_req_unsubscribe(req, on_nfc_target_add_event))
+	{
+		if (!afb_req_unsubscribe(req, on_nfc_target_remove_event))
+		{
+			afb_req_success(req, NULL, "Unsubscription success!");
+			return;
+		}
+	}
+	
+	afb_req_fail(req, NULL, "Unsubscription failure!");
 }
 
 /// @brief Get a list of devices.

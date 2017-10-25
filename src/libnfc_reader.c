@@ -1,5 +1,6 @@
 #include "nfc-binding.h"
 
+#include <signal.h>
 #include <string.h>
 #include <sys/types.h>
 #include <pthread.h>
@@ -13,13 +14,14 @@ typedef unsigned long int pthread_t;
 #include "libnfc_reader.h"
 #include "stringutils.h"
 
-extern struct afb_event on_nfc_read_event;
+extern struct afb_event on_nfc_target_add_event;
+extern struct afb_event on_nfc_target_remove_event;
 
 #define MAX_NFC_DEVICE_COUNT	8
 #define MAX_NFC_MODULATIONS		8
 #define MAX_NFC_BAUDRATES 		8
-#define POLL_NUMBER				0xff
-#define POLL_PERIOD				0x05
+#define POLL_NUMBER				0xA
+#define POLL_PERIOD				0x7
 
 typedef struct libnfc_device_tag
 {
@@ -36,13 +38,10 @@ typedef struct libnfc_context_tag
 	nfc_context*		context;
 	libnfc_device*		devices;
 	size_t				devices_count;
+	struct json_object* last_target;
 } libnfc_context;
 
-static libnfc_context libnfc = {
-	.context			= NULL,
-	.devices			= NULL,
-	.devices_count		= 0
-};
+static libnfc_context libnfc;
 
 void libnfc_polling_error(int code)
 {
@@ -93,91 +92,164 @@ void libnfc_polling_error(int code)
 	}
 }
 
+void add_nfc_field(struct json_object* parent, const char* field, const void* src, size_t sz)
+{
+	char* data;
+	
+	if (parent && field && src && sz)
+	{
+		data = to_hex_string(src, sz);
+		if (data)
+		{
+			json_object_object_add(parent, field, json_object_new_string(data));
+			free(data);
+		}
+	}
+}
+
+struct json_object* read_target(const nfc_target* target)
+{
+	struct json_object*	result;
+	const char*			mt;
+	
+	if (!target)
+	{
+		AFB_WARNING("libnfc: No target to read!");
+		return NULL;
+	}
+	
+	result = json_object_new_object();
+	mt = str_nfc_modulation_type(target->nm.nmt);
+	json_object_object_add(result, "Type", json_object_new_string(mt));
+	
+	switch(target->nm.nmt)
+	{
+		case NMT_ISO14443A:
+			add_nfc_field(result, "ATQA", target->nti.nai.abtAtqa, 2);
+			add_nfc_field(result, "SAK", &target->nti.nai.btSak, 1);
+			add_nfc_field(result, "UID", target->nti.nai.abtUid, target->nti.nai.szUidLen);
+			add_nfc_field(result, "ATS", target->nti.nai.abtAts, target->nti.nai.szAtsLen);
+			
+			break;
+		case NMT_ISO14443B:
+			add_nfc_field(result, "PUPI", target->nti.nbi.abtPupi, 4);
+			add_nfc_field(result, "Application Data", target->nti.nbi.abtApplicationData, 4);
+			add_nfc_field(result, "Protocol Info", target->nti.nbi.abtProtocolInfo, 3);
+			add_nfc_field(result, "Card Id", &target->nti.nbi.ui8CardIdentifier, 1);
+			
+			break;
+		default:
+			AFB_WARNING("libnfc: unsupported modulation type: %s.", mt);
+			json_object_object_add(result, "error", json_object_new_string("unsupported tag type"));
+			break;
+	}
+	return result;
+}
+
 void* libnfc_reader_main(void* arg)
 {
 	libnfc_device* device;
 	nfc_target nt;
 	int polled_target_count;
-	
-	// Read datas
-	const char* mt;
-	char* field1;
-	char* field2;
-	char* field3;
-	char* field4;
+	nfc_modulation mods[MAX_NFC_MODULATIONS];
 	struct json_object* result;
+	size_t i, j;
 	
 	device = (libnfc_device*)arg;
 	
+	memset(mods, 0, sizeof(nfc_modulation) * MAX_NFC_MODULATIONS);
+	for(i = 0, j = 0; i < device->modulations_count; ++i, ++j)
+	{
+		if (device->modulations[i].nmt != NMT_DEP)
+			mods[j] = device->modulations[i];
+		else --j;
+	}
+	
 	while(device->device)
 	{
-		polled_target_count = nfc_initiator_poll_target(device->device, device->modulations, device->modulations_count, POLL_NUMBER, POLL_PERIOD, &nt);
+		polled_target_count = nfc_initiator_poll_target
+		(
+			device->device,
+			mods,
+			j,
+			POLL_NUMBER,
+			POLL_PERIOD,
+			&nt
+		);
+		
 		switch(polled_target_count)
 		{
-			case 0:
-				AFB_INFO("libnfc: polling done with no result.");
-				break;
-				
-			case 1:
-				mt = str_nfc_modulation_type(nt.nm.nmt);
-				AFB_NOTICE("libnfc: polling done with one result of type %s.", mt);
-				switch(nt.nm.nmt)
+		case 0:
+			// No target detected
+			AFB_INFO("libnfc: polling done with no result.");
+			if (libnfc.last_target)
+			{
+				AFB_NOTICE("libnfc: tag removed = %s", json_object_to_json_string(libnfc.last_target));
+				afb_event_push(on_nfc_target_remove_event, libnfc.last_target);
+				libnfc.last_target = NULL;
+			}
+			break;
+			
+		case 1:
+			AFB_INFO("libnfc: polling done with one result.");
+			// One target detected
+			result = read_target(&nt);
+			
+			if (libnfc.last_target)
+			{
+				if (strcmp(json_object_to_json_string(result), json_object_to_json_string(libnfc.last_target)))
 				{
-					case NMT_ISO14443A:
-						field1 = to_hex_string(nt.nti.nai.abtAtqa, 2);
-						field2 = to_hex_string(&nt.nti.nai.btSak, 1);
-						field3 = to_hex_string(nt.nti.nai.abtUid, nt.nti.nai.szUidLen);
-						field4 = to_hex_string(nt.nti.nai.abtAts, nt.nti.nai.szAtsLen);
-						
-						result = json_object_new_object();
-						json_object_object_add(result, "Type", json_object_new_string(mt));
-						if (field1) json_object_object_add(result, "ATQA", json_object_new_string(field1));
-						if (field2) json_object_object_add(result, "SAK", json_object_new_string(field2));
-						if (field3) json_object_object_add(result, "UID", json_object_new_string(field3));
-						if (field4) json_object_object_add(result, "ATS", json_object_new_string(field4));
-						
-						break;
-					case NMT_ISO14443B:
-						field1 = to_hex_string(nt.nti.nbi.abtPupi, 4);
-						field2 = to_hex_string(nt.nti.nbi.abtApplicationData, 4);
-						field3 = to_hex_string(nt.nti.nbi.abtProtocolInfo, 3);
-						field4 = to_hex_string(&nt.nti.nbi.ui8CardIdentifier, 1);
-						
-						result = json_object_new_object();
-						json_object_object_add(result, "Type", json_object_new_string(mt));
-						if (field1) json_object_object_add(result, "PUPI", json_object_new_string(field1));
-						if (field2) json_object_object_add(result, "Application Data", json_object_new_string(field2));
-						if (field3)json_object_object_add(result, "Protocol Info", json_object_new_string(field3));
-						if (field4)json_object_object_add(result, "Card Id", json_object_new_string(field4));
-						
-						break;
-					default:
-						AFB_WARNING("libnfc: unsupported modulation type: %s.", mt);
-						break;
+					AFB_NOTICE("libnfc: tag removed = %s", json_object_to_json_string(libnfc.last_target));
+					afb_event_push(on_nfc_target_remove_event, libnfc.last_target);
+					libnfc.last_target = NULL;
 				}
+			}
+			
+			if (!libnfc.last_target)
+			{
+				json_object_get(result);
+				libnfc.last_target = result;
 				
-				if (result)
-				{
-					AFB_NOTICE("libnfc: push tag read event=%s", json_object_to_json_string(result));
-					afb_event_push(on_nfc_read_event, result);
-				}
-				if (field1) free(field1);
-				if (field2) free(field2);
-				if (field3) free(field3);
-				if (field4) free(field4);
-				
-				break;
-				
-			default:
-				if (polled_target_count < 0)
-					libnfc_polling_error(polled_target_count);
-				else
-					AFB_WARNING("libnfc: polling done with unsupported result count: %d.", polled_target_count);
-				break;
+				AFB_NOTICE("libnfc: tag added = %s", json_object_to_json_string(result));
+				afb_event_push(on_nfc_target_add_event, result);
+			}
+			break;
+			
+		default:
+			if (polled_target_count < 0) libnfc_polling_error(polled_target_count);
+			else AFB_WARNING("libnfc: polling done with unsupported result count: %d.", polled_target_count);
+			
+			// Consider target is removed
+			if (libnfc.last_target)
+			{
+				AFB_NOTICE("libnfc: tag removed = %s", json_object_to_json_string(libnfc.last_target));
+				afb_event_push(on_nfc_target_remove_event, libnfc.last_target);
+				libnfc.last_target = NULL;
+			}
+			break;
 		}
 	}
-
 	return NULL;
+}
+
+void sigterm_handler(int sig)
+{
+	size_t i;
+	nfc_device* dev;
+	if (sig == SIGTERM && libnfc.context && libnfc.devices_count)
+	{
+		for(i = 0; i < libnfc.devices_count; ++i)
+		{
+			if (libnfc.devices[i].device)
+			{
+				dev = libnfc.devices[i].device;
+				libnfc.devices[i].device = NULL;
+				nfc_close(dev);
+			}
+		}
+		nfc_exit(libnfc.context);
+		libnfc.context = NULL;
+	}
 }
 
 /// @brief Start the libnfc context.
@@ -185,12 +257,15 @@ void* libnfc_reader_main(void* arg)
 int libnfc_init()
 {
 	nfc_device* dev;
-	nfc_connstring connstrings[MAX_NFC_DEVICE_COUNT];
 	const nfc_modulation_type* modulations;
 	const nfc_baud_rate* baudrates;
+	size_t modulation_idx;
+	nfc_connstring connstrings[MAX_NFC_DEVICE_COUNT];
 	size_t ref_device_count;
 	size_t device_idx;
-	size_t modulation_idx;
+	
+	
+	memset(&libnfc, 0, sizeof(libnfc_context));
 	
 	nfc_init(&libnfc.context);
 	if (libnfc.context == NULL)
@@ -212,11 +287,13 @@ int libnfc_init()
 	libnfc.devices = malloc(sizeof(libnfc_device) * libnfc.devices_count);
 	memset(libnfc.devices, 0, sizeof(libnfc_device) * libnfc.devices_count);
 	
+	signal(SIGTERM, sigterm_handler);
+	
 	for(device_idx = 0; device_idx < ref_device_count; ++device_idx)
 	{
 		AFB_NOTICE("libnfc: NFC Device found: \"%s\".", connstrings[device_idx]);
 		strcpy(libnfc.devices[device_idx].name, connstrings[device_idx]);
-		
+
 		// Find and register modulations
 		dev = nfc_open(libnfc.context, connstrings[device_idx]);
 		if (dev)
