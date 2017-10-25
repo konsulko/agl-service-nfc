@@ -53,3 +53,10 @@ dkms.conf
 
 # app-templates submodule
 app-templates/
+
+# Build
+build/
+
+# KDevelop
+.kdev4/
+*.kdev4
