@@ -19,8 +19,17 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.3)
 
 option(USE_LIBNFC "Enable or disable the 'libnfc' usage." ON)
+option(LIBNFC_POLL_ALL "Enable all modulation when polling." OFF)
+option(LIBNFC_POLL_NMT_ISO14443A "Enable ISO-14443A modulation when polling." ON)
+option(LIBNFC_POLL_NMT_ISOJEWEL "Enable ISO-JEWEL modulation when polling." OFF)
+option(LIBNFC_POLL_NMT_ISO14443B "Enable ISO-14443B modulation when polling." OFF)
+option(LIBNFC_POLL_NMT_ISO14443BI "Enable ISO-14443BI modulation when polling." OFF)
+option(LIBNFC_POLL_NMT_ISO14443B2SR "Enable ISO-14443B2SR modulation when polling." OFF)
+option(LIBNFC_POLL_NMT_ISO14443B2CT "Enable ISO-14443B2CT modulation when polling." OFF)
+option(LIBNFC_POLL_NMT_FELICA "Enable Felica modulation when polling." OFF)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/conf.d/cmake/config.cmake)
 
 install(DIRECTORY htdocs/nfc DESTINATION htdocs)
 install(DIRECTORY etc DESTINATION ./)
+

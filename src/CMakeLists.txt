@@ -25,7 +25,40 @@ set(NFC_BINDING_SOURCES api.c nfc-binding.c)
 if (USE_LIBNFC)
 	set(NFC_BINDING_SOURCES ${NFC_BINDING_SOURCES} libnfc_reader.c)
 	add_definitions(-DUSE_LIBNFC=1)
+
+	if(LIBNFC_POLL_ALL)
+		add_definitions(-DLIBNFC_POLL_ALL=1)
+	endif()
+
+	if(LIBNFC_POLL_NMT_ISO14443A)
+		add_definitions(-DLIBNFC_POLL_NMT_ISO14443A=1)
+	endif()
+
+	if(LIBNFC_POLL_NMT_ISOJEWEL)
+		add_definitions(-DLIBNFC_POLL_NMT_ISOJEWEL=1)
+	endif()
+
+	if(LIBNFC_POLL_NMT_ISO14443B)
+		add_definitions(-DLIBNFC_POLL_NMT_ISO14443B=1)
+	endif()
+
+	if(LIBNFC_POLL_NMT_ISO14443BI)
+		add_definitions(-DLIBNFC_POLL_NMT_ISO14443BI=1)
+	endif()
+
+	if(LIBNFC_POLL_NMT_ISO14443B2SR)
+		add_definitions(-DLIBNFC_POLL_NMT_ISO14443B2SR=1)
+	endif()
+
+	if(LIBNFC_POLL_NMT_ISO14443B2CT)
+		add_definitions(-DLIBNFC_POLL_NMT_ISO14443B2CT=1)
+	endif()
+
+	if(LIBNFC_POLL_NMT_FELICA)
+		add_definitions(-DLIBNFC_POLL_NMT_FELICA=1)
+	endif()
 endif()
+
 message(STATUS "libnfc enabled: ${USE_LIBNFC}")
 
 add_library(${TARGET_NAME} MODULE ${NFC_BINDING_SOURCES})

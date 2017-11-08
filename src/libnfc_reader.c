@@ -20,7 +20,7 @@ extern struct afb_event on_nfc_target_remove_event;
 #define MAX_NFC_DEVICE_COUNT	8
 #define MAX_NFC_MODULATIONS		8
 #define MAX_NFC_BAUDRATES 		8
-#define POLL_NUMBER				0xA
+#define POLL_NUMBER				0x1
 #define POLL_PERIOD				0x7
 
 typedef struct libnfc_device_tag
@@ -153,16 +153,39 @@ void* libnfc_reader_main(void* arg)
 	int polled_target_count;
 	nfc_modulation mods[MAX_NFC_MODULATIONS];
 	struct json_object* result;
-	size_t i, j;
+	size_t i;
 	
 	device = (libnfc_device*)arg;
 	
 	memset(mods, 0, sizeof(nfc_modulation) * MAX_NFC_MODULATIONS);
-	for(i = 0, j = 0; i < device->modulations_count; ++i, ++j)
+	for(i = 0; i < device->modulations_count; ++i)
 	{
-		if (device->modulations[i].nmt != NMT_DEP)
-			mods[j] = device->modulations[i];
-		else --j;
+		switch(device->modulations[i].nmt)
+		{
+#if defined(LIBNFC_POLL_ALL) || defined(LIBNFC_POLL_NMT_ISO14443A)
+			case NMT_ISO14443A:
+#endif
+#if defined(LIBNFC_POLL_ALL) || defined(LIBNFC_POLL_NMT_ISOJEWEL)
+			case NMT_JEWEL:
+#endif
+#if defined(LIBNFC_POLL_ALL) || defined(LIBNFC_POLL_NMT_ISO14443B)
+			case NMT_ISO14443B:
+#endif
+#if defined(LIBNFC_POLL_ALL) || defined(LIBNFC_POLL_NMT_ISO14443BI)
+			case NMT_ISO14443BI:
+#endif
+#if defined(LIBNFC_POLL_ALL) || defined(LIBNFC_POLL_NMT_ISO14443B2SR)
+			case NMT_ISO14443B2SR:
+#endif
+#if defined(LIBNFC_POLL_ALL) || defined(LIBNFC_POLL_NMT_ISO14443B2CT)
+			case NMT_ISO14443B2CT:
+#endif
+#if defined(LIBNFC_POLL_ALL) || defined(LIBNFC_POLL_NMT_FELICA)
+			case NMT_FELICA:
+#endif
+				mods[i] = device->modulations[i];
+			// NMT_DEP is always disabled because it can't be polled
+		}
 	}
 	
 	while(device->device)
@@ -171,7 +194,7 @@ void* libnfc_reader_main(void* arg)
 		(
 			device->device,
 			mods,
-			j,
+			i,
 			POLL_NUMBER,
 			POLL_PERIOD,
 			&nt
