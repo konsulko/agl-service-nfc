@@ -51,9 +51,6 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
-# app-templates submodule
-app-templates/
-
 # Build
 build/
 
