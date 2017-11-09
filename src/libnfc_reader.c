@@ -153,12 +153,12 @@ void* libnfc_reader_main(void* arg)
 	int polled_target_count;
 	nfc_modulation mods[MAX_NFC_MODULATIONS];
 	struct json_object* result;
-	size_t i;
+	size_t i, j;
 	
 	device = (libnfc_device*)arg;
 	
 	memset(mods, 0, sizeof(nfc_modulation) * MAX_NFC_MODULATIONS);
-	for(i = 0; i < device->modulations_count; ++i)
+	for(i = 0, j = 0; i < device->modulations_count; ++i, ++j)
 	{
 		switch(device->modulations[i].nmt)
 		{
@@ -183,8 +183,14 @@ void* libnfc_reader_main(void* arg)
 #if defined(LIBNFC_POLL_ALL) || defined(LIBNFC_POLL_NMT_FELICA)
 			case NMT_FELICA:
 #endif
-				mods[i] = device->modulations[i];
-			// NMT_DEP is always disabled because it can't be polled
+				mods[j] = device->modulations[i];
+				AFB_NOTICE("libnfc: polling for %s at %s is ENABLED.", str_nfc_modulation_type(device->modulations[i].nmt), str_nfc_baud_rate(device->modulations[i].nbr));
+				break;
+			default:
+				--j;
+				// NMT_DEP is always disabled because it can't be polled
+				AFB_NOTICE("libnfc: polling for %s at %s is DISABLED.", str_nfc_modulation_type(device->modulations[i].nmt), str_nfc_baud_rate(device->modulations[i].nbr));
+				break;
 		}
 	}
 	
@@ -194,7 +200,7 @@ void* libnfc_reader_main(void* arg)
 		(
 			device->device,
 			mods,
-			i,
+			j,
 			POLL_NUMBER,
 			POLL_PERIOD,
 			&nt
