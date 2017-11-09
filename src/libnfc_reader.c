@@ -261,23 +261,28 @@ void* libnfc_reader_main(void* arg)
 	return NULL;
 }
 
-void sigterm_handler(int sig)
+void exit_handler()
 {
 	size_t i;
 	nfc_device* dev;
+	for(i = 0; i < libnfc.devices_count; ++i)
+	{
+		if (libnfc.devices[i].device)
+		{
+			dev = libnfc.devices[i].device;
+			libnfc.devices[i].device = NULL;
+			nfc_close(dev);
+		}
+	}
+	nfc_exit(libnfc.context);
+	libnfc.context = NULL;
+}
+
+void sigterm_handler(int sig)
+{
 	if (sig == SIGTERM && libnfc.context && libnfc.devices_count)
 	{
-		for(i = 0; i < libnfc.devices_count; ++i)
-		{
-			if (libnfc.devices[i].device)
-			{
-				dev = libnfc.devices[i].device;
-				libnfc.devices[i].device = NULL;
-				nfc_close(dev);
-			}
-		}
-		nfc_exit(libnfc.context);
-		libnfc.context = NULL;
+		exit_handler();
 	}
 }
 
@@ -293,6 +298,7 @@ int libnfc_init()
 	size_t ref_device_count;
 	size_t device_idx;
 	
+	atexit(exit_handler);
 	
 	memset(&libnfc, 0, sizeof(libnfc_context));
 	

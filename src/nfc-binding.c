@@ -106,7 +106,7 @@ void verb_list_devices_capabilities(struct afb_req req)
 
 /// @brief Start polling.
 /// @param[in] req The query.
-void verb_start_polling(struct afb_req req)
+void verb_start(struct afb_req req)
 {
 	struct json_object* result;
 	struct json_object* arg;
@@ -126,7 +126,9 @@ void verb_start_polling(struct afb_req req)
 	afb_req_success(req, result, NULL);
 }
 
-void verb_stop_polling(struct afb_req req)
+/// @brief Stop polling.
+/// @param[in] req The query.
+void verb_stop(struct afb_req req)
 {
 	afb_req_fail(req, "Not implemented yet!", NULL);
 }

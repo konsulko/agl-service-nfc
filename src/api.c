@@ -35,15 +35,15 @@ static const struct afb_verb_v2 nfc_verbs[] = {
 		.session = AFB_SESSION_NONE_V2
 	},
 	{
-		.verb = "start-polling",
-		.callback = verb_start_polling,
+		.verb = "start",
+		.callback = verb_start,
 		.auth = NULL,
 		.info = NULL,
 		.session = AFB_SESSION_NONE_V2
 	},	
 	{
-		.verb = "stop-polling",
-		.callback = verb_stop_polling,
+		.verb = "stop",
+		.callback = verb_stop,
 		.auth = NULL,
 		.info = NULL,
 		.session = AFB_SESSION_NONE_V2
