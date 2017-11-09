@@ -37,6 +37,40 @@ Expect random error, but seem to stay stable and working.
 
 ² Polling is stopped at detection but no tag is exposed.
 
+# UDev rules
+
+You may want to add some UDev's rule for nfc device to make things easier.
+You can put those lines into /etc/udev/rules.d/99-nfc.rules
+```Shell
+ACTION!="add", GOTO="nfc_pn53x_end"
+
+# Advanced Card Systems, Ltd ACR122U
+ATTRS{idVendor}=="072f", ATTRS{idProduct}=="2200", MODE="0666", SYMLINK+="nfc%n"
+
+# SCM Microsystems, Inc. SCL3711-NFC&RW
+ATTRS{idVendor}=="04e6", ATTRS{idProduct}=="5591", MODE="0666", SYMLINK+="nfc%n"
+
+LABEL="nfc_pn53x_end"
+```
+
+# Kernel module
+The SCL3711 is supported by the kernel and neard, so it takes the device and prevent the libnfc to use it.
+If you have an error saying that the device is busy, it's probably the reason why.
+
+You have to unload nfc kernel modules to get it work using libnfc.
+```ShellSession
+root@localhost# rmmod pn533_usb
+root@localhost# rmmod pn533
+root@localhost# rmmod nfc
+```
+
+To make it permanent you can add this file: /etc/modprobe.d/blacklist-nfc.conf
+```
+blacklist nfc
+blacklist pn533
+blacklist pn533_usb
+```
+
 # Compilation option
 
 * USE_LIBNFC - Enable or disable the 'libnfc' usage. Default is ON.
