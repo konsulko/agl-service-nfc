@@ -84,7 +84,7 @@ void libnfc_polling_error(int code)
 		AFB_ERROR("libnfc: polling failed with NFC_ESOFT (%d) code: Software error (allocation, file/pipe creation, etc.)!", code);
 		break;
 	case NFC_ECHIP:
-		AFB_ERROR("libnfc: polling failed with NFC_ECHIP (%d) code: Device's internal chip error!", code);
+		//AFB_ERROR("libnfc: polling failed with NFC_ECHIP (%d) code: Device's internal chip error!", code);
 		break;
 	default:
 		AFB_ERROR("libnfc: polling failed with unknown code: %d!", code);
