@@ -45,7 +45,6 @@ set(PROJECT_APP_TEMPLATES_DIR "conf.d/app-templates")
 
 # Compilation Mode (DEBUG, RELEASE)
 # ----------------------------------
-set(USE_EFENCE 1)
 
 # Kernel selection if needed. You can choose between a
 # mandatory version to impose a minimal version.
@@ -71,7 +70,7 @@ set (PKG_REQUIRED_LIST
 	json-c
 	libsystemd>=222
 	afb-daemon
-	libmicrohttpd>=0.9.55
+	libnfc
 )
 
 # Prefix path where will be installed the files
@@ -133,7 +132,7 @@ set(LD_LIBRARY_PATH ${CMAKE_INSTALL_PREFIX}/lib64 ${CMAKE_INSTALL_PREFIX}/lib)
 # Optional location for config.xml.in
 # -----------------------------------
 #set(WIDGET_ICON conf.d/wgt/${PROJECT_ICON} CACHE PATH "Path to the widget icon")
-#set(WIDGET_CONFIG_TEMPLATE ${CMAKE_CURRENT_SOURCE_DIR}/conf.d/wgt/config.xml.in CACHE PATH "Path to widget config file template (config.xml.in)")
+set(WIDGET_CONFIG_TEMPLATE ${CMAKE_CURRENT_SOURCE_DIR}/conf.d/wgt/config.xml.in CACHE PATH "Path to widget config file template (config.xml.in)")
 
 # Mandatory widget Mimetype specification of the main unit
 # --------------------------------------------------------------------------
@@ -150,14 +149,14 @@ set(LD_LIBRARY_PATH ${CMAKE_INSTALL_PREFIX}/lib64 ${CMAKE_INSTALL_PREFIX}/lib)
 #	content.src designates the relative path of the binary.
 #	For such application, only security setup is made.
 #
-set(WIDGET_TYPE MimeType_Not_Set)
+set(WIDGET_TYPE application/vnd.agl.service)
 
 # Mandatory Widget entry point file of the main unit
 # --------------------------------------------------------------
 # This is the file that will be executed, loaded,
 # at launch time by the application framework.
 #
-set(WIDGET_ENTRY_POINT EntryPoint_Path_Not_Set)
+set(WIDGET_ENTRY_POINT config.xml)
 
 # Optional dependencies order
 # ---------------------------
