@@ -1,4 +1,4 @@
-var afb = new AFB("api", "mysecret");
+var afb = new AFB("api", "HELLO");
 var ws;
 
 function add_debbug_panel() {
