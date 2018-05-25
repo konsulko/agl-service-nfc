@@ -18,14 +18,11 @@
 
 # Project Info
 # ------------------
-set(PROJECT_NAME nfc-binding)
-set(PROJECT_VERSION "0.1")
-set(PROJECT_PRETTY_NAME "NFC Binding")
-set(PROJECT_DESCRIPTION "Abstract NFC readers.")
-set(PROJECT_URL "https://gerrit.automotivelinux.org/gerrit/apps/app-templates")
+set(PROJECT_NAME agl-service-nfc)
+set(PROJECT_PRETTY_NAME "AFM binding for NFC")
+set(PROJECT_DESCRIPTION "Binding for handling NFC access controls")
+set(PROJECT_VERSION "1.0")
 set(PROJECT_ICON "icon.png")
-set(PROJECT_AUTHOR "Collignon, Loïc")
-set(PROJECT_AUTHOR_MAIL "loic.collignon@iot.bzh")
 set(PROJECT_LICENSE "APL2.0")
 set(PROJECT_LANGUAGES,"C")
 
@@ -45,6 +42,7 @@ set(PROJECT_APP_TEMPLATES_DIR "conf.d/app-templates")
 
 # Compilation Mode (DEBUG, RELEASE)
 # ----------------------------------
+set(CMAKE_BUILD_TYPE "DEBUG")
 
 # Kernel selection if needed. You can choose between a
 # mandatory version to impose a minimal version.
@@ -57,8 +55,8 @@ set(PROJECT_APP_TEMPLATES_DIR "conf.d/app-templates")
 # NOTE*** FOR NOW IT CHECKS KERNEL Yocto environment and
 # Yocto SDK Kernel version.
 # -----------------------------------------------
-#set (kernel_mandatory_version 4.8)
-#set (kernel_minimal_version 4.8)
+#set(kernel_mandatory_version 4.8)
+set(kernel_minimal_version 4.8)
 
 # Compiler selection if needed. Impose a minimal version.
 # -----------------------------------------------
@@ -68,71 +66,26 @@ set (gcc_minimal_version 4.9)
 # -----------------------------
 set (PKG_REQUIRED_LIST
 	json-c
+	glib-2.0
+	libnfc
 	libsystemd>=222
 	afb-daemon
-	libnfc
 )
-
-# Prefix path where will be installed the files
-# Default: /usr/local (need root permission to write in)
-# ------------------------------------------------------
-#set(CMAKE_INSTALL_PREFIX $ENV{HOME}/opt)
 
 # Customize link option
 # -----------------------------
-list(APPEND link_libraries -lnfc)
-
-# Compilation options definition
-# Use CMake generator expressions to specify only for a specific language
-# Values are prefilled with default options that is currently used.
-# Either separate options with ";", or each options must be quoted separately
-# DO NOT PUT ALL OPTION QUOTED AT ONCE , COMPILATION COULD FAILED !
-# ----------------------------------------------------------------------------
-#set(COMPILE_OPTIONS
-# -Wall
-# -Wextra
-# -Wconversion
-# -Wno-unused-parameter
-# -Wno-sign-compare
-# -Wno-sign-conversion
-# -Werror=maybe-uninitialized
-# -Werror=implicit-function-declaration
-# -ffunction-sections
-# -fdata-sections
-# -fPIC
-# CACHE STRING "Compilation flags")
-#set(C_COMPILE_OPTIONS "" CACHE STRING "Compilation flags for C language.")
-#set(CXX_COMPILE_OPTIONS "" CACHE STRING "Compilation flags for C++ language.")
-#set(PROFILING_COMPILE_OPTIONS
-# -g
-# -O0
-# -pg
-# -Wp,-U_FORTIFY_SOURCE
-# CACHE STRING "Compilation flags for PROFILING build type.")
-#set(DEBUG_COMPILE_OPTIONS
-# -g
-# -ggdb
-# -Wp,-U_FORTIFY_SOURCE
-# CACHE STRING "Compilation flags for DEBUG build type.")
-#set(CCOV_COMPILE_OPTIONS
-# -g
-# -O2
-# --coverage
-# CACHE STRING "Compilation flags for CCOV build type.")
-#set(RELEASE_COMPILE_OPTIONS
-# -g
-# -O2
-# CACHE STRING "Compilation flags for RELEASE build type.")
+list (APPEND link_libraries -pthread)
 
 # (BUG!!!) as PKG_CONFIG_PATH does not work [should be an env variable]
 # ---------------------------------------------------------------------
+set(CMAKE_INSTALL_PREFIX $ENV{HOME}/opt)
 set(CMAKE_PREFIX_PATH ${CMAKE_INSTALL_PREFIX}/lib64/pkgconfig ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig)
 set(LD_LIBRARY_PATH ${CMAKE_INSTALL_PREFIX}/lib64 ${CMAKE_INSTALL_PREFIX}/lib)
 
 # Optional location for config.xml.in
 # -----------------------------------
-#set(WIDGET_ICON conf.d/wgt/${PROJECT_ICON} CACHE PATH "Path to the widget icon")
-set(WIDGET_CONFIG_TEMPLATE ${CMAKE_CURRENT_SOURCE_DIR}/conf.d/wgt/config.xml.in CACHE PATH "Path to widget config file template (config.xml.in)")
+set(WIDGET_CONFIG_TEMPLATE ${CMAKE_CURRENT_SOURCE_DIR}/conf.d/wgt/config.xml.in)
+
 
 # Mandatory widget Mimetype specification of the main unit
 # --------------------------------------------------------------------------
@@ -156,7 +109,12 @@ set(WIDGET_TYPE application/vnd.agl.service)
 # This is the file that will be executed, loaded,
 # at launch time by the application framework.
 #
-set(WIDGET_ENTRY_POINT config.xml)
+set(WIDGET_ENTRY_POINT lib/libafm-nfc-binding.so)
+
+# Print a helper message when every thing is finished
+# ----------------------------------------------------
+set(CLOSING_MESSAGE "Test with: afb-daemon --rootdir=\$\$(pwd)/package --binding=\$\$(pwd)/package/${WIDGET_ENTRY_POINT} --port=1234 --tracereq=common --token=\"1\" --verbose")
+set(PACKAGE_MESSAGE "Install widget file using in the target : afm-util install ${PROJECT_NAME}.wgt")
 
 # Optional dependencies order
 # ---------------------------
@@ -170,6 +128,10 @@ set(WIDGET_ENTRY_POINT config.xml)
 # -------------------------
 #set(EXTRA_LINK_LIBRARIES)
 
+# Optional force binding installation
+# ------------------------------------
+# set(BINDINGS_INSTALL_PREFIX PrefixPath )
+
 # Optional force binding Linking flag
 # ------------------------------------
 # set(BINDINGS_LINK_FLAG LinkOptions )
@@ -181,20 +143,8 @@ set(WIDGET_ENTRY_POINT config.xml)
 # Optional Application Framework security token
 # and port use for remote debugging.
 #------------------------------------------------------------
-set(AFB_TOKEN   ""     CACHE PATH "Default binder security token")
-set(AFB_REMPORT "1234" CACHE PATH "Default binder listening port")
-
-# Print a helper message when every thing is finished
-# ----------------------------------------------------
-set(CLOSING_MESSAGE "Typical binding launch: afb-daemon --port=${AFB_REMPORT} --workdir=${CMAKE_BINARY_DIR}/package --ldpaths=lib --roothttp=htdocs  --token=\"${AFB_TOKEN}\" --tracereq=common --verbose")
-set(PACKAGE_MESSAGE "Install widget file using in the target : afm-util install ${PROJECT_NAME}.wgt")
-
-# Optional schema validator about now only XML, LUA and JSON
-# are supported
-#------------------------------------------------------------
-#set(LUA_CHECKER "luac" "-p" CACHE STRING "LUA compiler")
-#set(XML_CHECKER "xmllint" CACHE STRING "XML linter")
-#set(JSON_CHECKER "json_verify" CACHE STRING "JSON linter")
+#set(AFB_TOKEN   ""      CACHE PATH "Default AFB_TOKEN")
+#set(AFB_REMPORT "1234" CACHE PATH "Default AFB_TOKEN")
 
 # This include is mandatory and MUST happens at the end
 # of this file, else you expose you to unexpected behavior
