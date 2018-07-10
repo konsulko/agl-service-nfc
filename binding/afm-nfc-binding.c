@@ -34,7 +34,8 @@
 #define AFB_BINDING_VERSION 2
 #include <afb/afb-binding.h>
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+#include "afm-nfc-common.h"
+
 #define WAIT_FOR_REMOVE(dev) { while (0 == nfc_initiator_target_is_present(dev, NULL)) {} }
 
 static struct afb_event presence_event;
@@ -44,22 +45,6 @@ static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static const nfc_modulation modulations[] = {
 	{ .nmt = NMT_ISO14443A, .nbr = NBR_106 },
 };
-
-static char *to_hex_string(unsigned char *data, size_t size)
-{
-	char *buffer = malloc((2 * size) + 1);
-	char *tmp = buffer;
-	int i;
-
-	if (buffer == NULL)
-		return buffer;
-
-	for (i = 0; i < size; i++) {
-		tmp += sprintf(tmp, "%.2x", data[i]);
-	}
-
-	return buffer;
-}
 
 static char *get_tag_uid(nfc_target *nt)
 {

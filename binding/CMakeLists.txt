@@ -21,7 +21,7 @@
 PROJECT_TARGET_ADD(afm-nfc-binding)
 
 	# Define project Targets
-	add_library(afm-nfc-binding MODULE afm-nfc-binding.c)
+	add_library(afm-nfc-binding MODULE afm-nfc-common.c afm-nfc-binding.c)
 
 	# Binder exposes a unique public entry point
 	SET_TARGET_PROPERTIES(${TARGET_NAME} PROPERTIES
