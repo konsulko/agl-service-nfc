@@ -19,8 +19,16 @@
 #ifndef AFM_NFC_COMMON_H
 #define AFM_NFC_COMMON_H
 
+#include <nfc/nfc-types.h>
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
 char *to_hex_string(unsigned char *data, size_t size);
+
+
+typedef struct {
+	nfc_context *ctx;
+	nfc_device *dev;
+} nfc_binding_data;
 
 #endif // AFM_NFC_COMMON_H

@@ -71,30 +71,12 @@ static void send_detect_event(char *current_id)
 
 static void *nfc_loop_thread(void *ptr)
 {
-	nfc_context *ctx = NULL;
-	nfc_device *dev = NULL;
-
-	nfc_init(&ctx);
-
-	dev = nfc_open(ctx, NULL);
-
-	if (dev == NULL) {
-		AFB_ERROR("Cannot get context for libnfc");
-		nfc_exit(ctx);
-		exit(EXIT_FAILURE);
-	}
-
-	if (nfc_initiator_init(dev) < 0) {
-		AFB_ERROR("Cannot get initiator mode from libnfc");
-		nfc_close(dev);
-		nfc_exit(ctx);
-		exit(EXIT_FAILURE);
-	}
+	nfc_binding_data *data = ptr;
 
 	while (1) {
 		nfc_target nt;
 		json_object *jresp;
-		int res = nfc_initiator_poll_target(dev, modulations, ARRAY_SIZE(modulations), 0xff, 2, &nt);
+		int res = nfc_initiator_poll_target(data->dev, modulations, ARRAY_SIZE(modulations), 0xff, 2, &nt);
 
 		if (res < 0)
 			break;
@@ -106,7 +88,7 @@ static void *nfc_loop_thread(void *ptr)
 
 		pthread_mutex_unlock(&mutex);
 
-		WAIT_FOR_REMOVE(dev);
+		WAIT_FOR_REMOVE(data->dev);
 
 		pthread_mutex_lock(&mutex);
 
@@ -121,19 +103,58 @@ static void *nfc_loop_thread(void *ptr)
 		pthread_mutex_unlock(&mutex);
 	}
 
-	nfc_close(dev);
-	nfc_exit(ctx);
+	nfc_close(data->dev);
+	nfc_exit(data->ctx);
+	free(data);
 
 	return NULL;
+}
+
+
+static nfc_binding_data *get_libnfc_instance()
+{
+	nfc_context *ctx = NULL;
+	nfc_device *dev = NULL;
+	nfc_binding_data *data;
+
+	nfc_init(&ctx);
+
+	dev = nfc_open(ctx, NULL);
+
+	if (dev == NULL) {
+		AFB_ERROR("Cannot get context for libnfc");
+		nfc_exit(ctx);
+		return NULL;
+	}
+
+	if (nfc_initiator_init(dev) < 0) {
+		AFB_ERROR("Cannot get initiator mode from libnfc");
+		nfc_close(dev);
+		nfc_exit(ctx);
+		return NULL;
+	}
+
+	data = malloc(sizeof(nfc_binding_data));
+
+	if (data) {
+		data->ctx = ctx;
+		data->dev = dev;
+	}
+
+	return data;
 }
 
 static int init()
 {
 	pthread_t thread_id;
+	nfc_binding_data *data = get_libnfc_instance();
 
 	presence_event = afb_daemon_make_event("presence");
 
-	return pthread_create(&thread_id, NULL, nfc_loop_thread, NULL);
+	if (data)
+		return pthread_create(&thread_id, NULL, nfc_loop_thread, data);
+	else
+		return -ENODEV;
 }
 
 static void subscribe(struct afb_req request)
