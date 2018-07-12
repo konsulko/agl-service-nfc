@@ -28,6 +28,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <json-c/json.h>
+#include <neardal/neardal.h>
 #include <nfc/nfc.h>
 #include <nfc/nfc-types.h>
 
@@ -155,10 +156,98 @@ static nfc_binding_data *get_libnfc_instance()
 	return data;
 }
 
+static void neard_cb_record_found(const char *tag_name, void *ptr)
+{
+	nfc_binding_data *data = ptr;
+	neardal_record *record;
+	int ret = neardal_get_record_properties(tag_name, &record);
+
+	if (ret == NEARDAL_SUCCESS) {
+		GVariantIter iter;
+		char *s = NULL;
+		GVariant *v, *value = (neardal_record_to_g_variant(record));
+		json_object *jresp = json_object_new_object();
+		json_object *jdict = json_object_new_object();
+
+		g_variant_iter_init(&iter, value);
+		json_object_object_add(jresp, "status", json_object_new_string("detected"));
+
+		while (g_variant_iter_loop(&iter, "{sv}", &s, &v)) {
+			gchar *str;
+
+			if (g_strcmp0("Name", s) == 0)
+				continue;
+
+			str = g_variant_print(v, 0);
+			str[strlen(str) - 1] = '\0';
+
+			json_object_object_add(jdict, s, json_object_new_string(str + 1));
+
+			g_free(str);
+		}
+
+		json_object_object_add(jresp, "record", jdict);
+
+		neardal_free_record(record);
+
+		pthread_mutex_lock(&mutex);
+		data->jresp = jresp;
+		json_object_get(jresp);
+		pthread_mutex_unlock(&mutex);
+
+		afb_event_push(presence_event, jresp);
+	}
+}
+
+static void neard_cb_tag_removed(const char *tag_name, void *ptr)
+{
+	nfc_binding_data *data = ptr;
+	json_object *jresp = json_object_new_object();
+
+	pthread_mutex_lock(&mutex);
+	if (data->jresp) {
+		json_object_put(data->jresp);
+		data->jresp = NULL;
+	}
+	pthread_mutex_unlock(&mutex);
+
+	json_object_object_add(jresp, "status", json_object_new_string("removed"));
+
+	afb_event_push(presence_event, jresp);
+
+	g_main_loop_quit(data->loop);
+}
+
+static void *neard_loop_thread(void *ptr)
+{
+	nfc_binding_data *data = ptr;
+	int ret;
+
+	data->loop = g_main_loop_new(NULL, FALSE);
+
+	neardal_set_cb_tag_lost(neard_cb_tag_removed, ptr);
+	neardal_set_cb_record_found(neard_cb_record_found, ptr);
+
+	while (1) {
+		ret = neardal_start_poll(data->adapter);
+
+		if (ret != NEARDAL_SUCCESS)
+			break;
+
+		g_main_loop_run(data->loop);
+	}
+
+	g_free(data->adapter);
+
+	return NULL;
+}
+
 static int init(afb_api_t api)
 {
 	pthread_t thread_id;
 	nfc_binding_data *data = get_libnfc_instance();
+	char **adapters = NULL;
+	int num_adapters, ret = -ENODEV;
 
 	presence_event = afb_daemon_make_event("presence");
 
@@ -168,7 +257,27 @@ static int init(afb_api_t api)
 		return pthread_create(&thread_id, NULL, nfc_loop_thread, data);
 	}
 
-	return -ENODEV;
+	ret = neardal_get_adapters(&adapters, &num_adapters);
+
+	if (ret == NEARDAL_SUCCESS) {
+		ret = neardal_set_adapter_property(adapters[0], NEARD_ADP_PROP_POWERED, GINT_TO_POINTER(1));
+
+		if (ret == NEARDAL_SUCCESS) {
+			data = malloc(sizeof(nfc_binding_data));
+
+			if (data == NULL)
+				return -ENOMEM;
+
+			afb_api_set_userdata(api, data);
+
+			data->adapter = g_strdup(adapters[0]);
+			ret = pthread_create(&thread_id, NULL, neard_loop_thread, data);
+		}
+	}
+
+	neardal_free_array(&adapters);
+
+	return ret;
 }
 
 static void subscribe(afb_req_t request)

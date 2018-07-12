@@ -19,6 +19,7 @@
 #ifndef AFM_NFC_COMMON_H
 #define AFM_NFC_COMMON_H
 
+#include <glib.h>
 #include <json-c/json.h>
 #include <nfc/nfc-types.h>
 
@@ -30,6 +31,9 @@ char *to_hex_string(unsigned char *data, size_t size);
 typedef struct {
 	nfc_context *ctx;
 	nfc_device *dev;
+
+	gchar *adapter;
+	GMainLoop *loop;
 
 	/* cached JSON event response */
 	json_object *jresp;

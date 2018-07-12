@@ -69,6 +69,7 @@ set (PKG_REQUIRED_LIST
 	glib-2.0
 	libnfc
 	libsystemd>=222
+	neardal
 	afb-daemon
 )
 
