@@ -31,14 +31,14 @@
 #include <nfc/nfc.h>
 #include <nfc/nfc-types.h>
 
-#define AFB_BINDING_VERSION 2
+#define AFB_BINDING_VERSION 3
 #include <afb/afb-binding.h>
 
 #include "afm-nfc-common.h"
 
 #define WAIT_FOR_REMOVE(dev) { while (0 == nfc_initiator_target_is_present(dev, NULL)) {} }
 
-static struct afb_event presence_event;
+static afb_event_t presence_event;
 static char *current_uid = NULL;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -157,7 +157,7 @@ static int init()
 		return -ENODEV;
 }
 
-static void subscribe(struct afb_req request)
+static void subscribe(afb_req_t request)
 {
 	const char *value = afb_req_value(request, "value");
 
@@ -176,7 +176,7 @@ static void subscribe(struct afb_req request)
 	afb_req_fail(request, "failed", "Invalid event");
 }
 
-static void unsubscribe(struct afb_req request)
+static void unsubscribe(afb_req_t request)
 {
 	const char *value = afb_req_value(request, "value");
 
@@ -189,7 +189,7 @@ static void unsubscribe(struct afb_req request)
 	afb_req_fail(request, "failed", "Invalid event");
 }
 
-static const struct afb_verb_v2 binding_verbs[] = {
+static const struct afb_verb_v3 binding_verbs[] = {
 	{ .verb = "subscribe",   .callback = subscribe,    .info = "Subscribe to NFC events" },
 	{ .verb = "unsubscribe", .callback = unsubscribe,  .info = "Unsubscribe to NFC events" },
 	{ }
@@ -198,7 +198,7 @@ static const struct afb_verb_v2 binding_verbs[] = {
 /*
  * binder API description
  */
-const struct afb_binding_v2 afbBindingV2 = {
+const struct afb_binding_v3 afbBindingV3 = {
 	.api		= "nfc",
 	.specification	= "NFC service API",
 	.verbs		= binding_verbs,
