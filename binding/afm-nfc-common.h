@@ -19,6 +19,7 @@
 #ifndef AFM_NFC_COMMON_H
 #define AFM_NFC_COMMON_H
 
+#include <json-c/json.h>
 #include <nfc/nfc-types.h>
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
@@ -29,6 +30,9 @@ char *to_hex_string(unsigned char *data, size_t size);
 typedef struct {
 	nfc_context *ctx;
 	nfc_device *dev;
+
+	/* cached JSON event response */
+	json_object *jresp;
 } nfc_binding_data;
 
 #endif // AFM_NFC_COMMON_H

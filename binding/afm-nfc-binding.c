@@ -54,7 +54,7 @@ static char *get_tag_uid(nfc_target *nt)
 	return NULL;
 }
 
-static void send_detect_event(char *current_id)
+static void send_detect_event(char *current_id, nfc_binding_data *data)
 {
 	json_object *jresp;
 
@@ -65,6 +65,14 @@ static void send_detect_event(char *current_id)
 
 	json_object_object_add(jresp, "status", json_object_new_string("detected"));
 	json_object_object_add(jresp, "uid", json_object_new_string(current_uid));
+
+	if (data->jresp) {
+		json_object_put(data->jresp);
+		data->jresp = NULL;
+	}
+
+	json_object_get(jresp);
+	data->jresp = jresp;
 
 	afb_event_push(presence_event, jresp);
 }
@@ -84,7 +92,7 @@ static void *nfc_loop_thread(void *ptr)
 		pthread_mutex_lock(&mutex);
 
 		current_uid = get_tag_uid(&nt);
-		send_detect_event(current_uid);
+		send_detect_event(current_uid, data);
 
 		pthread_mutex_unlock(&mutex);
 
@@ -95,10 +103,13 @@ static void *nfc_loop_thread(void *ptr)
 		jresp = json_object_new_object();
 		json_object_object_add(jresp, "status", json_object_new_string("removed"));
 		json_object_object_add(jresp, "uid", json_object_new_string(current_uid));
-		afb_event_push(presence_event, jresp);
 
-		free(current_uid);
-		current_uid = NULL;
+		if (data->jresp) {
+			json_object_put(data->jresp);
+			data->jresp = NULL;
+		}
+
+		afb_event_push(presence_event, jresp);
 
 		pthread_mutex_unlock(&mutex);
 	}
@@ -144,22 +155,27 @@ static nfc_binding_data *get_libnfc_instance()
 	return data;
 }
 
-static int init()
+static int init(afb_api_t api)
 {
 	pthread_t thread_id;
 	nfc_binding_data *data = get_libnfc_instance();
 
 	presence_event = afb_daemon_make_event("presence");
 
-	if (data)
+	if (data) {
+		afb_api_set_userdata(api, data);
+
 		return pthread_create(&thread_id, NULL, nfc_loop_thread, data);
-	else
-		return -ENODEV;
+	}
+
+	return -ENODEV;
 }
 
 static void subscribe(afb_req_t request)
 {
 	const char *value = afb_req_value(request, "value");
+	afb_api_t api = afb_req_get_api(request);
+	nfc_binding_data *data = afb_api_get_userdata(api);
 
 	if (value && !strcasecmp(value, "presence")) {
 		afb_req_subscribe(request, presence_event);
@@ -167,7 +183,10 @@ static void subscribe(afb_req_t request)
 
 		// send initial tag if exists
 		pthread_mutex_lock(&mutex);
-		send_detect_event(current_uid);
+		if (data && data->jresp) {
+			json_object_get(data->jresp);
+			afb_event_push(presence_event, data->jresp);
+		}
 		pthread_mutex_unlock(&mutex);
 
 		return;
