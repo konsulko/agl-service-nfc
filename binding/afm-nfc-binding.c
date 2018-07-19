@@ -40,7 +40,6 @@
 #define WAIT_FOR_REMOVE(dev) { while (0 == nfc_initiator_target_is_present(dev, NULL)) {} }
 
 static afb_event_t presence_event;
-static char *current_uid = NULL;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static const nfc_modulation modulations[] = {
@@ -65,7 +64,7 @@ static void send_detect_event(char *current_id, nfc_binding_data *data)
 	jresp = json_object_new_object();
 
 	json_object_object_add(jresp, "status", json_object_new_string("detected"));
-	json_object_object_add(jresp, "uid", json_object_new_string(current_uid));
+	json_object_object_add(jresp, "uid", json_object_new_string(current_id));
 
 	if (data->jresp) {
 		json_object_put(data->jresp);
@@ -86,6 +85,7 @@ static void *nfc_loop_thread(void *ptr)
 		nfc_target nt;
 		json_object *jresp;
 		int res = nfc_initiator_poll_target(data->dev, modulations, ARRAY_SIZE(modulations), 0xff, 2, &nt);
+		char *current_uid;
 
 		if (res < 0)
 			break;
