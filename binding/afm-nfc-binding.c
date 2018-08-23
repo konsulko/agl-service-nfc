@@ -134,13 +134,13 @@ static nfc_binding_data *get_libnfc_instance()
 	dev = nfc_open(ctx, NULL);
 
 	if (dev == NULL) {
-		AFB_ERROR("Cannot get context for libnfc");
+		AFB_WARNING("Cannot get context for libnfc");
 		nfc_exit(ctx);
 		return NULL;
 	}
 
 	if (nfc_initiator_init(dev) < 0) {
-		AFB_ERROR("Cannot get initiator mode from libnfc");
+		AFB_WARNING("Cannot get initiator mode from libnfc");
 		nfc_close(dev);
 		nfc_exit(ctx);
 		return NULL;
@@ -247,7 +247,7 @@ static int init(afb_api_t api)
 	pthread_t thread_id;
 	nfc_binding_data *data = get_libnfc_instance();
 	char **adapters = NULL;
-	int num_adapters, ret = -ENODEV;
+	int num_adapters, ret;
 
 	presence_event = afb_daemon_make_event("presence");
 
@@ -277,7 +277,7 @@ static int init(afb_api_t api)
 
 	neardal_free_array(&adapters);
 
-	return ret;
+	return 0;
 }
 
 static void subscribe(afb_req_t request)
