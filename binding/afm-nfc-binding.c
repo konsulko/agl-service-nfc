@@ -247,7 +247,7 @@ static int init(afb_api_t api)
 	pthread_t thread_id;
 	nfc_binding_data *data = get_libnfc_instance();
 	char **adapters = NULL;
-	int num_adapters, ret = 0;
+	int num_adapters, ret;
 
 	presence_event = afb_daemon_make_event("presence");
 
@@ -277,7 +277,7 @@ static int init(afb_api_t api)
 
 	neardal_free_array(&adapters);
 
-	return ret;
+	return 0;
 }
 
 static void subscribe(afb_req_t request)
