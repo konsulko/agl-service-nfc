@@ -21,17 +21,8 @@
 
 #include <glib.h>
 #include <json-c/json.h>
-#include <nfc/nfc-types.h>
-
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
-
-char *to_hex_string(unsigned char *data, size_t size);
-
 
 typedef struct {
-	nfc_context *ctx;
-	nfc_device *dev;
-
 	gchar *adapter;
 	GMainLoop *loop;
 
