@@ -34,176 +34,210 @@
 
 #include "afm-nfc-common.h"
 
-static afb_event_t presence_event;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static afb_event_t presence_event;
 
 static void neard_cb_record_found(const char *tag_name, void *ptr)
 {
-	nfc_binding_data *data = ptr;
-	neardal_record *record;
-	int ret = neardal_get_record_properties(tag_name, &record);
+        nfc_binding_data *data = ptr;
+        neardal_record *record;
 
-	if (ret == NEARDAL_SUCCESS) {
-		GVariantIter iter;
-		char *s = NULL;
-		GVariant *v, *value = (neardal_record_to_g_variant(record));
-		json_object *jresp = json_object_new_object();
-		json_object *jdict = json_object_new_object();
+        int ret = neardal_get_record_properties(tag_name, &record);
+        if (ret == NEARDAL_SUCCESS) {
+                GVariantIter iter;
+                char *s = NULL;
+                GVariant *v, *value = (neardal_record_to_g_variant(record));
+                json_object *jresp = json_object_new_object();
+                json_object *jdict = json_object_new_object();
 
-		g_variant_iter_init(&iter, value);
-		json_object_object_add(jresp, "status", json_object_new_string("detected"));
+                g_variant_iter_init(&iter, value);
+                json_object_object_add(jresp, "status",
+                                       json_object_new_string("detected"));
 
-		while (g_variant_iter_loop(&iter, "{sv}", &s, &v)) {
-			gchar *str;
+                while (g_variant_iter_loop(&iter, "{sv}", &s, &v)) {
+                        gchar *str;
 
 			if (g_strcmp0("Name", s) == 0)
 				continue;
 
-			str = g_variant_print(v, 0);
-			str[strlen(str) - 1] = '\0';
+			str =  g_variant_print(v, 0);
+                        str[strlen(str) - 1] = '\0';
+                        json_object_object_add(jdict, s,
+                                               json_object_new_string(str + 1));
+                        g_free(str);
+                }
 
-			json_object_object_add(jdict, s, json_object_new_string(str + 1));
-
-			g_free(str);
-		}
-
-		json_object_object_add(jresp, "record", jdict);
+ 		json_object_object_add(jresp, "record", jdict);
 
 		neardal_free_record(record);
 
-		pthread_mutex_lock(&mutex);
-		data->jresp = jresp;
-		json_object_get(jresp);
-		pthread_mutex_unlock(&mutex);
+                pthread_mutex_lock(&mutex);
+                data->jresp = jresp;
+                json_object_get(jresp);
+                pthread_mutex_unlock(&mutex);
 
-		afb_event_push(presence_event, jresp);
-	}
+                afb_event_push(presence_event, jresp);
+        }
 }
 
 static void neard_cb_tag_removed(const char *tag_name, void *ptr)
 {
-	nfc_binding_data *data = ptr;
-	json_object *jresp = json_object_new_object();
+        nfc_binding_data *data = ptr;
+        json_object *jresp = json_object_new_object();
 
-	pthread_mutex_lock(&mutex);
-	if (data->jresp) {
-		json_object_put(data->jresp);
-		data->jresp = NULL;
-	}
-	pthread_mutex_unlock(&mutex);
+        pthread_mutex_lock(&mutex);
+        if (data->jresp) {
+                json_object_put(data->jresp);
+                data->jresp = NULL;
+        }
+        pthread_mutex_unlock(&mutex);
+	
+        json_object_object_add(jresp, "status",
+                               json_object_new_string("removed"));
 
-	json_object_object_add(jresp, "status", json_object_new_string("removed"));
+        afb_event_push(presence_event, jresp);
 
-	afb_event_push(presence_event, jresp);
-
-	g_main_loop_quit(data->loop);
+        g_main_loop_quit(data->loop);
 }
 
-static void *neard_loop_thread(void *ptr)
+static void *poll_adapter(void *ptr)
 {
-	nfc_binding_data *data = ptr;
-	int ret;
+        nfc_binding_data *data = ptr;
+        int ret;
 
-	data->loop = g_main_loop_new(NULL, FALSE);
+        data->loop = g_main_loop_new(NULL, FALSE);
 
-	neardal_set_cb_tag_lost(neard_cb_tag_removed, ptr);
-	neardal_set_cb_record_found(neard_cb_record_found, ptr);
+        neardal_set_cb_tag_lost(neard_cb_tag_removed, ptr);
+        neardal_set_cb_record_found(neard_cb_record_found, ptr);
 
-	while (1) {
-		ret = neardal_start_poll(data->adapter);
+        ret = neardal_set_adapter_property(data->adapter,
+                                           NEARD_ADP_PROP_POWERED,
+                                           GINT_TO_POINTER(1));
+        if (ret != NEARDAL_SUCCESS) {
+                AFB_API_DEBUG(afbBindingV3root,
+                          "failed to power %s adapter on: ret=0x%x (%s)",
+                          data->adapter, ret, neardal_error_get_text(ret));
+                g_free(data->adapter);
+                return NULL;
+        }
 
-		if (ret != NEARDAL_SUCCESS)
-			break;
+        while (1) {
+                ret = neardal_start_poll(data->adapter);
 
-		g_main_loop_run(data->loop);
+                if ((ret != NEARDAL_SUCCESS) &&
+                    (ret != NEARDAL_ERROR_POLLING_ALREADY_ACTIVE)) 
+                        break;
+
+                g_main_loop_run(data->loop);
+        }
+
+        g_free(data->adapter);
+
+        return NULL;
+}
+
+static int get_adapter(nfc_binding_data *data, unsigned int id)
+{
+	char **adapters = NULL;
+	int num_adapters, ret;
+
+	ret = neardal_get_adapters(&adapters, &num_adapters);
+	if (ret != NEARDAL_SUCCESS) {
+		AFB_API_DEBUG(afbBindingV3root,
+			      "failed to find adapters ret=0x%x (%s)",
+			      ret, neardal_error_get_text(ret));
+
+		return -EIO;
 	}
 
-	g_free(data->adapter);
+	if (id > num_adapters - 1) {
+		AFB_API_DEBUG(afbBindingV3root, 
+			      "adapter out of range (%d - %d)", 
+			      id, num_adapters);
+		return -EINVAL;
+	}
 
-	return NULL;
+	data->adapter = g_strdup(adapters[id]);
+	neardal_free_array(&adapters);
+
+	return ret;
 }
 
 static int init(afb_api_t api)
 {
-	pthread_t thread_id;
-	nfc_binding_data *data = NULL;
-	char **adapters = NULL;
-	int num_adapters, ret;
+        nfc_binding_data *data;
+        pthread_t thread_id;
+        int ret;
 
-	presence_event = afb_daemon_make_event("presence");
+        data = malloc(sizeof(nfc_binding_data));
+        if (data == NULL)
+                return -ENOMEM;
 
-	ret = neardal_get_adapters(&adapters, &num_adapters);
+        presence_event = afb_api_make_event(api, "presence");
+        if (!afb_event_is_valid(presence_event)) {
+                AFB_API_ERROR(api, "Failed to create event");
+                return -EINVAL;
+        }
 
-	if (ret == NEARDAL_SUCCESS) {
-		ret = neardal_set_adapter_property(adapters[0], NEARD_ADP_PROP_POWERED, GINT_TO_POINTER(1));
+	/* get the first adapter */
+        ret = get_adapter(data, 0);
+	if (ret != NEARDAL_SUCCESS)
+		return 0;
 
-		if (ret == NEARDAL_SUCCESS) {
-			data = malloc(sizeof(nfc_binding_data));
+	AFB_API_DEBUG(api, " %s adapter found", data->adapter);
 
-			if (data == NULL)
-				return -ENOMEM;
+	afb_api_set_userdata(api, data);
+	ret = pthread_create(&thread_id, NULL, poll_adapter, data);
+	if (ret)
+		AFB_API_ERROR(api, "polling pthread creation failed");
 
-			afb_api_set_userdata(api, data);
-
-			data->adapter = g_strdup(adapters[0]);
-			ret = pthread_create(&thread_id, NULL, neard_loop_thread, data);
-		}
-	}
-
-	neardal_free_array(&adapters);
-
-	return 0;
+        return 0;
 }
 
 static void subscribe(afb_req_t request)
 {
-	const char *value = afb_req_value(request, "value");
-	afb_api_t api = afb_req_get_api(request);
-	nfc_binding_data *data = afb_api_get_userdata(api);
-
-	if (value && !strcasecmp(value, "presence")) {
-		afb_req_subscribe(request, presence_event);
-		afb_req_success(request, NULL, NULL);
-
-		// send initial tag if exists
-		pthread_mutex_lock(&mutex);
-		if (data && data->jresp) {
-			json_object_get(data->jresp);
-			afb_event_push(presence_event, data->jresp);
-		}
-		pthread_mutex_unlock(&mutex);
+        if (afb_req_subscribe(request, presence_event) < 0) {
+                AFB_REQ_ERROR(request, "subscribe to presence_event failed");
+                afb_req_reply(request, NULL, "failed", "Invalid event");
 
 		return;
-	}
-
-	afb_req_fail(request, "failed", "Invalid event");
+        }
+     
+	afb_req_reply(request, NULL, NULL, NULL);
 }
 
 static void unsubscribe(afb_req_t request)
 {
-	const char *value = afb_req_value(request, "value");
+        if (afb_req_unsubscribe(request, presence_event) < 0) {
+                AFB_REQ_ERROR(request,
+                              "unsubscribe to presence_event failed");
+                afb_req_reply(request, NULL, "failed", "Invalid event");
 
-	if (value && !strcasecmp(value, "presence")) {
-		afb_req_unsubscribe(request, presence_event);
-		afb_req_success(request, NULL, NULL);
 		return;
 	}
 
-	afb_req_fail(request, "failed", "Invalid event");
+	afb_req_reply(request, NULL, NULL, NULL);
 }
 
-static const struct afb_verb_v3 binding_verbs[] = {
-	{ .verb = "subscribe",   .callback = subscribe,    .info = "Subscribe to NFC events" },
-	{ .verb = "unsubscribe", .callback = unsubscribe,  .info = "Unsubscribe to NFC events" },
-	{ }
+const afb_verb_t binding_verbs[] = {
+        { .verb = "subscribe",   .callback = subscribe,
+	  .info = "Subscribe to NFC events" },
+        { .verb = "unsubscribe", .callback = unsubscribe,
+	  .info = "Unsubscribe to NFC events" },
+        { .verb = NULL }
 };
 
 /*
  * binder API description
  */
-const struct afb_binding_v3 afbBindingV3 = {
-	.api		= "nfc",
-	.specification	= "NFC service API",
-	.verbs		= binding_verbs,
-	.init		= init,
+const afb_binding_t afbBindingExport = {
+        .api            = "nfc",
+        .specification  = "NFC service API",
+        .info           = "AGL nfc service",
+        .verbs          = binding_verbs,
+        .preinit        = NULL,
+        .init           = init,
+        .onevent        = NULL,
+        .noconcurrency  = 0
 };
+
