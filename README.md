@@ -18,4 +18,4 @@ The NDEF data shall include a text record ('uid') to keep compatibility with the
 | Name               | Description                          | JSON Response                                                          |
 |--------------------|:-------------------------------------|:-----------------------------------------------------------------------|
 | presence           | event that reports NFC tag presence  |  *Response:* {"status": "detected",                                    |
-|                    |                                      |      "record": { "Type": "Text", "uid" : "042eb3628e4981"},            |
+|                    |                                      |               "uid": "042eb3628e4981"},                                |
