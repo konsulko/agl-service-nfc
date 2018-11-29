@@ -55,7 +55,6 @@ static void __attribute__((unused)) dbg_dump_tag_records(neardal_tag *tag)
 	return;
 }
 
-
 static void __attribute__((unused)) dbg_dump_record_content(neardal_record record)
 {
 #define DBG_RECORD(__x) if (record.__x)  \
@@ -108,7 +107,7 @@ static void record_found(const char *tag_name, void *ptr)
 			      "%s tag, record %s= %s", tag_name, s, str);
 
 		json_object_object_add(jdict, s,
-                                       json_object_new_string(str + 1));
+				       json_object_new_string(str + 1));
 		g_free(str);
 	}
 
@@ -251,9 +250,7 @@ static int init(afb_api_t api)
 	pthread_t thread_id;
 	int ret;
 
-	data = malloc(sizeof(nfc_binding_data));
-	if (!data)
-		return -ENOMEM;
+	data = g_malloc0(sizeof(nfc_binding_data));
 
 	presence_event = afb_api_make_event(api, "presence");
 	if (!afb_event_is_valid(presence_event)) {
@@ -284,21 +281,21 @@ static int init(afb_api_t api)
 
 static void subscribe(afb_req_t request)
 {
-        if (afb_req_subscribe(request, presence_event) < 0) {
-                AFB_REQ_ERROR(request, "subscribe to presence_event failed");
-                afb_req_reply(request, NULL, "failed", "Invalid event");
+	if (afb_req_subscribe(request, presence_event) < 0) {
+		AFB_REQ_ERROR(request, "subscribe to presence_event failed");
+		afb_req_reply(request, NULL, "failed", "Invalid event");
 
 		return;
-        }
+	}
 
 	afb_req_reply(request, NULL, NULL, NULL);
 }
 
 static void unsubscribe(afb_req_t request)
 {
-        if (afb_req_unsubscribe(request, presence_event) < 0) {
-                AFB_REQ_ERROR(request, "unsubscribe to presence_event failed");
-                afb_req_reply(request, NULL, "failed", "Invalid event");
+	if (afb_req_unsubscribe(request, presence_event) < 0) {
+		AFB_REQ_ERROR(request, "unsubscribe to presence_event failed");
+		afb_req_reply(request, NULL, "failed", "Invalid event");
 
 		return;
 	}
@@ -307,23 +304,20 @@ static void unsubscribe(afb_req_t request)
 }
 
 static const afb_verb_t binding_verbs[] = {
-        { .verb = "subscribe",   .callback = subscribe, 
+	{ .verb = "subscribe",   .callback = subscribe, 
 	  .info = "Subscribe to NFC events" },
-        { .verb = "unsubscribe", .callback = unsubscribe, 
+	{ .verb = "unsubscribe", .callback = unsubscribe, 
 	  .info = "Unsubscribe to NFC events" },
-        { .verb = NULL }
+	{ }
 };
 
 /*
  * binder API description
  */
 const afb_binding_t afbBindingExport = {
-        .api            = "nfc",
-        .specification  = "NFC service API",
-        .info           = "AGL nfc service",
-        .verbs          = binding_verbs,
-        .preinit        = NULL,
-        .init           = init,
-        .onevent        = NULL,
-        .noconcurrency  = 0
+	.api            = "nfc",
+	.specification  = "NFC service API",
+	.info           = "AGL nfc service",
+	.verbs          = binding_verbs,
+	.init           = init,
 };
