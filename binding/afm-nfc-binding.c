@@ -281,10 +281,18 @@ static int init(afb_api_t api)
 
 static void subscribe(afb_req_t request)
 {
+	const char *value = afb_req_value(request, "value");
+	const char *ename = afb_event_name(presence_event);
+
+	if (!value || !ename)
+		return;
+
+	if (strcasecmp(value, ename))
+		return;
+
 	if (afb_req_subscribe(request, presence_event) < 0) {
 		AFB_REQ_ERROR(request, "subscribe to presence_event failed");
 		afb_req_reply(request, NULL, "failed", "Invalid event");
-
 		return;
 	}
 
@@ -293,10 +301,18 @@ static void subscribe(afb_req_t request)
 
 static void unsubscribe(afb_req_t request)
 {
+	const char *value = afb_req_value(request, "value");
+	const char *ename = afb_event_name(presence_event);
+
+	if (!value || !ename)
+		return;
+
+	if (strcasecmp(value, ename))
+		return;
+
 	if (afb_req_unsubscribe(request, presence_event) < 0) {
 		AFB_REQ_ERROR(request, "unsubscribe to presence_event failed");
 		afb_req_reply(request, NULL, "failed", "Invalid event");
-
 		return;
 	}
 
