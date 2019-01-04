@@ -39,26 +39,28 @@
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static afb_event_t presence_event;
 
-static void __attribute__((unused)) dbg_dump_tag_records(neardal_tag *tag)
+static void __attribute__((unused)) dbg_dump_adapter_info(neardal_adapter *adp)
 {
-	char **recs = tag->records;
-	int i;
+#define DBG_ADP(__x) if (adp->__x)  \
+	AFB_API_DEBUG(afbBindingV3root, "adapter %s=%s\n", STR(__x), (adp->__x))
 
-	if (!recs) {
-		AFB_API_DEBUG(afbBindingV3root, "tag empty!");
-		return;
-	}
-
-	for (i = 0; recs[i] != NULL; i++)
-		AFB_API_DEBUG(afbBindingV3root, "tag record[n]: %s", recs[i]);
-
-	return;
+	DBG_ADP(name);
+	DBG_ADP(mode);
 }
 
-static void __attribute__((unused)) dbg_dump_record_content(neardal_record record)
+static void __attribute__((unused)) dbg_dump_tag_info(neardal_tag *tag)
 {
-#define DBG_RECORD(__x) if (record.__x)  \
-	AFB_API_DEBUG(afbBindingV3root, "record %s=%s", STR(__x), (record.__x))
+#define DBG_TAG(__x) if (tag->__x)  \
+	AFB_API_DEBUG(afbBindingV3root, "tag %s=%s\n", STR(__x), (tag->__x))
+
+	DBG_TAG(name);
+	DBG_TAG(type);
+}
+
+static void __attribute__((unused)) dbg_dump_record_content(neardal_record *rcd)
+{
+#define DBG_RECORD(__x) if (rcd->__x)  \
+	AFB_API_DEBUG(afbBindingV3root, "record %s=%s", STR(__x), (rcd->__x))
 
 	DBG_RECORD(authentication);
 	DBG_RECORD(representation);
@@ -73,6 +75,95 @@ static void __attribute__((unused)) dbg_dump_record_content(neardal_record recor
 	DBG_RECORD(uri);
 }
 
+static void adapter_added(const char *aname, void *ptr)
+{
+	nfc_binding_data *data = ptr;
+	neardal_adapter*adapter;
+	int ret;
+
+	if (!aname || !ptr)
+		return;
+
+	ret = neardal_get_adapter_properties(aname, &adapter);
+	if (ret != NEARDAL_SUCCESS) {
+		AFB_API_ERROR(afbBindingV3root,
+			      "'%s', cant get properties!\n", aname);
+		return;
+	}
+	dbg_dump_adapter_info(adapter);
+
+	if (data->adapter) {
+		AFB_API_DEBUG(afbBindingV3root,
+			      "ignoring new if: '%s', using '%s'\n",
+			      aname, data->adapter);
+		return;
+	}
+
+	data->adapter = g_strdup(aname);
+}
+
+static void adapter_removed(const char *aname, void *ptr)
+{
+	nfc_binding_data *data = ptr;
+	neardal_adapter*adapter;
+	int ret;
+
+	if (!data || !data->adapter)
+		return;
+
+	if (!strcmp(data->adapter, aname)) {
+		g_free(data->adapter);
+		data->adapter = NULL;
+	}
+
+	AFB_API_DEBUG(afbBindingV3root, "'%s removed'\n", aname);
+
+	g_main_loop_quit(data->loop);
+}
+
+static void adapter_prop_changed(char *aname, char *prop,
+				 void *value, void *cookie)
+{
+	nfc_binding_data *data;
+	unsigned int val;
+	int ret = NEARDAL_SUCCESS;
+
+	if (!value || !prop || !aname || !cookie)
+		return;
+
+	data = cookie;
+	val = GPOINTER_TO_UINT(value);
+	AFB_API_DEBUG(afbBindingV3root, "'%s' -> %s=0x%X\n", aname, prop, val);
+
+	if (!strcmp(prop, "Polling") && !val)
+		ret = neardal_start_poll(data->adapter);
+
+	if ((ret != NEARDAL_SUCCESS) &&
+	    (ret != NEARDAL_ERROR_POLLING_ALREADY_ACTIVE)) {
+		AFB_API_ERROR(afbBindingV3root,
+			      "failed to start polling  %s : ret=0x%x (%s)\n",
+			      data->adapter, ret, neardal_error_get_text(ret));
+		goto out;
+	}
+
+	if (!strcmp(prop, "Powered") && !val)
+		ret = neardal_set_adapter_property(data->adapter,
+						   NEARD_ADP_PROP_POWERED,
+						   GINT_TO_POINTER(1));
+	if (ret != NEARDAL_SUCCESS) {
+		AFB_API_ERROR(afbBindingV3root,
+			      "failed to power %s : ret=0x%x (%s)\n",
+			      data->adapter, ret, neardal_error_get_text(ret));
+		goto out;
+	}
+
+	if (!strcmp(prop, "Mode"))
+		AFB_API_DEBUG(afbBindingV3root, "%s, %s, %s \n", aname, prop,
+			      (char*)value);
+out:
+	return;
+}
+
 static void record_found(const char *tag_name, void *ptr)
 {
 	json_object *jresp, *jdict, *jtemp;
@@ -82,6 +173,9 @@ static void record_found(const char *tag_name, void *ptr)
 	GVariantIter iter;
 	char *s = NULL;
 	int ret;
+
+	if (!tag_name || !ptr)
+		return;
 
 	ret = neardal_get_record_properties(tag_name, &record);
 	if (ret != NEARDAL_SUCCESS) {
@@ -111,6 +205,7 @@ static void record_found(const char *tag_name, void *ptr)
 		g_free(str);
 	}
 
+	dbg_dump_record_content(record);
 	neardal_free_record(record);
 
 	/*
@@ -140,6 +235,9 @@ static void tag_found(const char *tag_name, void *ptr)
 	neardal_tag *tag;
 	int ret;
 
+	if (!tag_name)
+		return;
+
 	ret = neardal_get_tag_properties(tag_name, &tag);
 	if (ret != NEARDAL_SUCCESS) {
 		AFB_API_ERROR(afbBindingV3root,
@@ -148,16 +246,19 @@ static void tag_found(const char *tag_name, void *ptr)
 		return;
 	}
 
-	dbg_dump_tag_records(tag);
+	dbg_dump_tag_info(tag);
 	neardal_free_tag(tag);
 
 	return;
 }
 
-static void tag_removed(const char *tag_name, void *ptr)
+static void tag_lost(const char *tag_name, void *ptr)
 {
 	nfc_binding_data *data = ptr;
 	json_object *jresp;
+
+	if (!tag_name || !ptr)
+		return;
 
 	pthread_mutex_lock(&mutex);
 	if (data->jresp) {
@@ -175,51 +276,102 @@ static void tag_removed(const char *tag_name, void *ptr)
 	g_main_loop_quit(data->loop);
 }
 
+static void install_adapter_callbacks(void *usrptr)
+{
+	neardal_set_cb_adapter_added(adapter_added, usrptr);
+	neardal_set_cb_adapter_removed(adapter_removed, usrptr);
+	neardal_set_cb_adapter_property_changed(adapter_prop_changed, usrptr);
+	AFB_API_DEBUG(afbBindingV3root, "NFC adapter callbacks registered\n");
+}
+
+static void install_tag_callbacks(void *usrptr)
+{
+	neardal_set_cb_tag_found(tag_found, usrptr);
+	neardal_set_cb_tag_lost(tag_lost, usrptr);
+	neardal_set_cb_record_found(record_found, usrptr);
+	AFB_API_DEBUG(afbBindingV3root, "NFC tag callbacks registered\n");
+}
+
+static void remove_adapter_callbacks(void *usrptr)
+{
+	neardal_set_cb_adapter_added(NULL, usrptr);
+	neardal_set_cb_adapter_removed(NULL, usrptr);
+	neardal_set_cb_adapter_property_changed(NULL, usrptr);
+	AFB_API_DEBUG(afbBindingV3root, "NFC adapter callbacks removed\n");
+}
+
+static void remove_tag_callbacks(void *usrptr)
+{
+	neardal_set_cb_tag_found(NULL, usrptr);
+	neardal_set_cb_tag_lost(NULL, usrptr);
+	neardal_set_cb_record_found(NULL, usrptr);
+	AFB_API_DEBUG(afbBindingV3root, "NFC tag callbacks removed\n");
+}
+
 static void *poll_adapter(void *ptr)
 {
+	neardal_adapter* nfcdev = NULL;
 	nfc_binding_data *data = ptr;
 	int ret;
 
-	data->loop = g_main_loop_new(NULL, FALSE);
+	if (!data)
+		return NULL;
 
-	neardal_set_cb_tag_found(tag_found, ptr);
-	neardal_set_cb_tag_lost(tag_removed, ptr);
-	neardal_set_cb_record_found(record_found, ptr);
+	install_adapter_callbacks(data);
+
+	ret = neardal_get_adapter_properties(data->adapter, &nfcdev);
+	if (ret != NEARDAL_SUCCESS) {
+		AFB_API_ERROR(afbBindingV3root,
+			      "configuring '%s', cant get properties!\n",
+			      data->adapter);
+		goto out;
+	}
+
+	if (nfcdev->powered)
+		goto ploop;
 
 	ret = neardal_set_adapter_property(data->adapter,
 					   NEARD_ADP_PROP_POWERED,
 					   GINT_TO_POINTER(1));
-	if (ret != NEARDAL_SUCCESS) {
-		AFB_API_DEBUG(afbBindingV3root,
-			      "failed to power %s adapter on: ret=0x%x (%s)",
+	if (ret != NEARDAL_SUCCESS)
+		AFB_API_ERROR(afbBindingV3root,
+			      "failed to power up %s adapter: ret=0x%x (%s)\n",
 			      data->adapter, ret, neardal_error_get_text(ret));
 
-		goto out;
-	}
+ploop:
+	neardal_free_adapter(nfcdev);
+
+	data->loop = g_main_loop_new(NULL, FALSE);
 
 	for (;;) {
+		install_tag_callbacks(data);
+
 		ret = neardal_start_poll(data->adapter);
+		if ((ret == NEARDAL_SUCCESS) ||
+		    (ret == NEARDAL_ERROR_POLLING_ALREADY_ACTIVE))
+			g_main_loop_run(data->loop);
 
-		if ((ret != NEARDAL_SUCCESS) &&
-		    (ret != NEARDAL_ERROR_POLLING_ALREADY_ACTIVE))
+		remove_tag_callbacks(data);
+		if (data->adapter == NULL)
 			break;
-
-		g_main_loop_run(data->loop);
 	}
 
 	AFB_API_DEBUG(afbBindingV3root, "exiting polling loop");
 
 out:
 	g_free(data->adapter);
-	free(data);
+	g_free(data);
 
 	return NULL;
 }
 
-static int get_adapter(nfc_binding_data *data, unsigned int id)
+static int get_adapter(nfc_binding_data *const data, unsigned int id)
 {
 	char **adapters = NULL;
 	int num_adapters, ret;
+
+	if (!data)
+		return -EINVAL;
 
 	ret = neardal_get_adapters(&adapters, &num_adapters);
 	if (ret != NEARDAL_SUCCESS) {
@@ -255,14 +407,16 @@ static int init(afb_api_t api)
 	presence_event = afb_api_make_event(api, "presence");
 	if (!afb_event_is_valid(presence_event)) {
 		AFB_API_ERROR(api, "Failed to create event");
-		free(data);
+		g_free(data);
 		return -EINVAL;
 	}
 
 	/* get the first adapter */
 	ret = get_adapter(data, 0);
 	if (ret != NEARDAL_SUCCESS) {
-		free(data);
+		AFB_API_ERROR(api,
+			      "Failed to get adapter. Please start neard.\n");
+		g_free(data);
 		return 0;  /* ignore error if no adapter */
 	}
 
@@ -273,7 +427,7 @@ static int init(afb_api_t api)
 	if (ret) {
 		AFB_API_ERROR(api, "polling pthread creation failed");
 		g_free(data->adapter);
-		free(data);
+		g_free(data);
 	}
 
 	return 0;
