@@ -439,10 +439,10 @@ static void subscribe(afb_req_t request)
 	const char *ename = afb_event_name(presence_event);
 
 	if (!value || !ename)
-		return;
+		return afb_req_reply(request, NULL, "invalid", NULL);
 
 	if (strcasecmp(value, ename))
-		return;
+		return afb_req_reply(request, NULL, "invalid", NULL);
 
 	if (afb_req_subscribe(request, presence_event) < 0) {
 		AFB_REQ_ERROR(request, "subscribe to presence_event failed");
@@ -459,10 +459,10 @@ static void unsubscribe(afb_req_t request)
 	const char *ename = afb_event_name(presence_event);
 
 	if (!value || !ename)
-		return;
+		return afb_req_reply(request, NULL, "invalid", NULL);
 
 	if (strcasecmp(value, ename))
-		return;
+		return afb_req_reply(request, NULL, "invalid", NULL);
 
 	if (afb_req_unsubscribe(request, presence_event) < 0) {
 		AFB_REQ_ERROR(request, "unsubscribe to presence_event failed");
