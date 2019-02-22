@@ -50,7 +50,6 @@ dkms.conf
 
 # Build
 build/
-autobuild/
 
 # KDevelop
 .kdev4/
