@@ -105,8 +105,6 @@ static void adapter_added(const char *aname, void *ptr)
 static void adapter_removed(const char *aname, void *ptr)
 {
 	nfc_binding_data *data = ptr;
-	neardal_adapter*adapter;
-	int ret;
 
 	if (!data || !data->adapter)
 		return;
@@ -292,7 +290,7 @@ static void install_tag_callbacks(void *usrptr)
 	AFB_API_DEBUG(afbBindingV3root, "NFC tag callbacks registered\n");
 }
 
-static void remove_adapter_callbacks(void *usrptr)
+static void __attribute__((unused)) remove_adapter_callbacks(void *usrptr)
 {
 	neardal_set_cb_adapter_added(NULL, usrptr);
 	neardal_set_cb_adapter_removed(NULL, usrptr);
@@ -474,9 +472,9 @@ static void unsubscribe(afb_req_t request)
 }
 
 static const afb_verb_t binding_verbs[] = {
-	{ .verb = "subscribe",   .callback = subscribe, 
+	{ .verb = "subscribe",   .callback = subscribe,
 	  .info = "Subscribe to NFC events" },
-	{ .verb = "unsubscribe", .callback = unsubscribe, 
+	{ .verb = "unsubscribe", .callback = unsubscribe,
 	  .info = "Unsubscribe to NFC events" },
 	{ }
 };
