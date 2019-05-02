@@ -17,8 +17,6 @@
 --]]
 
 
--- Test subscribe 0
-_AFT.testVerbStatusSuccess('testsubscribeSuccess','nfc','subscribe', {})
+_AFT.testVerbStatusSuccess('testsubscribeSuccess','nfc','subscribe', {value="presence"})
 
--- Test unsubscribe 1
-_AFT.testVerbStatusSuccess('testunsubscribeSuccess','nfc','unsubscribe', {})
+_AFT.testVerbStatusSuccess('testunsubscribeSuccess','nfc','unsubscribe', {value="presence"})
