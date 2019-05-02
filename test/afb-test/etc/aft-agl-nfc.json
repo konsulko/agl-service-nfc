@@ -1,0 +1,22 @@
+{
+    "id": "http://iot.bzh/download/public/schema/json/ctl-schema.json#",
+    "": "http://iot.bzh/download/public/schema/json/ctl-schema.json#",
+    "metadata": {
+        "uid": "Test",
+        "version": "1.0",
+        "api": "aft-nfc",
+        "info": "AFB-test binding configuration file to test nfc api.",
+        "require": [
+            "nfc"
+        ]
+    },
+    "testVerb": {
+        "uid": "launch_all_tests",
+        "info": "Launch all the tests",
+        "action": "lua://AFT#_launch_test",
+        "args": {
+            "trace": "nfc",
+            "files": ["nfc.lua"]
+        }
+    }
+}
